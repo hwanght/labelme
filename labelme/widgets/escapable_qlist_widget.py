@@ -1,5 +1,5 @@
-from qtpy.QtCore import Qt
 from qtpy import QtWidgets
+from qtpy.QtCore import Qt
 
 
 class EscapableQListWidget(QtWidgets.QListWidget):
@@ -7,3 +7,6 @@ class EscapableQListWidget(QtWidgets.QListWidget):
         super(EscapableQListWidget, self).keyPressEvent(event)
         if event.key() == Qt.Key_Escape:
             self.clearSelection()
+
+    def itemDoubleClickedEvent(self, index):
+        self.itemDoubleClicked.emit(self.model().itemFromIndex(index))
