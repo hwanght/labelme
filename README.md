@@ -83,7 +83,7 @@ conda install -c conda-forge pyside2
 conda install pyqt
 # pip install pyqt5  # pyqt5 can be installed via pip on python3
 # if you 
-python setup.py install --force
+pip install .
 ```
 
 
