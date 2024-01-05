@@ -19,17 +19,10 @@ from labelme.config import get_config
 from labelme.label_file import LabelFile, LabelFileError
 from labelme.logger import logger
 from labelme.shape import Shape
-from labelme.widgets import (
-    BrightnessContrastDialog,
-    Canvas,
-    FileDialogPreview,
-    LabelDialog,
-    LabelListWidget,
-    LabelListWidgetItem,
-    ToolBar,
-    UniqueLabelQListWidget,
-    ZoomWidget,
-)
+from labelme.widgets import (BrightnessContrastDialog, Canvas,
+                             FileDialogPreview, LabelDialog, LabelListWidget,
+                             LabelListWidgetItem, ToolBar,
+                             UniqueLabelQListWidget, ZoomWidget)
 
 from . import utils
 

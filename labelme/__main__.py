@@ -4,13 +4,11 @@ import logging
 import os
 import os.path as osp
 import sys
+
 import yaml
+from qtpy import QtCore, QtWidgets
 
-from qtpy import QtCore
-from qtpy import QtWidgets
-
-from labelme import __appname__
-from labelme import __version__
+from labelme import __appname__, __version__
 from labelme.app import MainWindow
 from labelme.config import get_config
 from labelme.logger import logger
@@ -86,7 +84,7 @@ def main():
     parser.add_argument(
         "--labels",
         help="comma separated list of labels OR file containing labels",
-        default=argparse.SUPPRESS,
+        default="labels.txt",
     )
     parser.add_argument(
         "--validatelabel",
@@ -126,8 +124,10 @@ def main():
         if os.path.isfile(args.labels):
             with codecs.open(args.labels, "r", encoding="utf-8") as f:
                 args.labels = [line.strip() for line in f if line.strip()]
-        else:
+        elif args.labels != "labels.txt":
             args.labels = [line for line in args.labels.split(",") if line]
+        else:
+            args.__dict__.pop("labels")
 
     if hasattr(args, "label_flags"):
         if os.path.isfile(args.label_flags):

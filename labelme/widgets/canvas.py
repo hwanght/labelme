@@ -1,15 +1,12 @@
 import gdown
 import imgviz
-from qtpy import QtCore
-from qtpy import QtGui
-from qtpy import QtWidgets
+from qtpy import QtCore, QtGui, QtWidgets
 
 import labelme.ai
-from labelme.logger import logger
-from labelme import QT5
-from labelme.shape import Shape
 import labelme.utils
-
+from labelme import QT5
+from labelme.logger import logger
+from labelme.shape import Shape
 
 # TODO(unknown):
 # - [maybe] Find optimal epsilon value.
