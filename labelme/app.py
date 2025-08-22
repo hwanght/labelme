@@ -10,19 +10,28 @@ import webbrowser
 
 import imgviz
 import natsort
-from qtpy import QtCore, QtGui, QtWidgets
-from qtpy.QtCore import Qt
+import numpy as np
+from loguru import logger
+from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtCore import Qt
 
-from labelme import PY2, __appname__
-from labelme.ai import MODELS
+from labelme import __appname__
+from labelme._automation import bbox_from_text
 from labelme.config import get_config
 from labelme.label_file import LabelFile, LabelFileError
-from labelme.logger import logger
 from labelme.shape import Shape
-from labelme.widgets import (BrightnessContrastDialog, Canvas,
-                             FileDialogPreview, LabelDialog, LabelListWidget,
-                             LabelListWidgetItem, ToolBar,
-                             UniqueLabelQListWidget, ZoomWidget)
+from labelme.widgets import (
+    AiPromptWidget,
+    BrightnessContrastDialog,
+    Canvas,
+    FileDialogPreview,
+    LabelDialog,
+    LabelListWidget,
+    LabelListWidgetItem,
+    ToolBar,
+    UniqueLabelQListWidget,
+    ZoomWidget,
+)
 
 from . import utils
 
@@ -58,18 +67,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self._config = config
 
         # set default shape colors
-        Shape.line_color = QtGui.QColor(*self._config["shape"]["line_color"])
-        Shape.fill_color = QtGui.QColor(*self._config["shape"]["fill_color"])
-        Shape.select_line_color = QtGui.QColor(
+        Shape.line_color = QtGui.QColor(*self._config["shape"]["line_color"])  # type: ignore[assignment]
+        Shape.fill_color = QtGui.QColor(*self._config["shape"]["fill_color"])  # type: ignore[assignment]
+        Shape.select_line_color = QtGui.QColor(  # type: ignore[assignment]
             *self._config["shape"]["select_line_color"]
         )
-        Shape.select_fill_color = QtGui.QColor(
+        Shape.select_fill_color = QtGui.QColor(  # type: ignore[assignment]
             *self._config["shape"]["select_fill_color"]
         )
-        Shape.vertex_fill_color = QtGui.QColor(
+        Shape.vertex_fill_color = QtGui.QColor(  # type: ignore[assignment]
             *self._config["shape"]["vertex_fill_color"]
         )
-        Shape.hvertex_fill_color = QtGui.QColor(
+        Shape.hvertex_fill_color = QtGui.QColor(  # type: ignore[assignment]
             *self._config["shape"]["hvertex_fill_color"]
         )
 
@@ -110,7 +119,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.flag_widget.itemChanged.connect(self.setDirty)
 
         self.labelList.itemSelectionChanged.connect(self.labelSelectionChanged)
-        self.labelList.itemDoubleClicked.connect(self.editLabel)
+        self.labelList.itemDoubleClicked.connect(self._edit_label)
         self.labelList.itemChanged.connect(self.labelItemChanged)
         self.labelList.itemDropped.connect(self.labelOrderChanged)
         self.shape_dock = QtWidgets.QDockWidget(self.tr("Polygon Labels"), self)
@@ -154,20 +163,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.zoomWidget = ZoomWidget()
         self.setAcceptDrops(True)
 
-        self.canvas = self.labelList.canvas = Canvas(
+        self.canvas = Canvas(
             epsilon=self._config["epsilon"],
             double_click=self._config["canvas"]["double_click"],
             num_backups=self._config["canvas"]["num_backups"],
             crosshair=self._config["canvas"]["crosshair"],
         )
         self.canvas.zoomRequest.connect(self.zoomRequest)
+        self.canvas.mouseMoved.connect(
+            lambda pos: self.status(f"Mouse is at: x={pos.x()}, y={pos.y()}")
+        )
 
         scrollArea = QtWidgets.QScrollArea()
         scrollArea.setWidget(self.canvas)
         scrollArea.setWidgetResizable(True)
         self.scrollBars = {
-            Qt.Vertical: scrollArea.verticalScrollBar(),
-            Qt.Horizontal: scrollArea.horizontalScrollBar(),
+            Qt.Vertical: scrollArea.verticalScrollBar(),  # type: ignore[attr-defined]
+            Qt.Horizontal: scrollArea.horizontalScrollBar(),  # type: ignore[attr-defined]
         }
         self.canvas.scrollRequest.connect(self.scrollRequest)
 
@@ -190,10 +202,10 @@ class MainWindow(QtWidgets.QMainWindow):
             if self._config[dock]["show"] is False:
                 getattr(self, dock).setVisible(False)
 
-        self.addDockWidget(Qt.RightDockWidgetArea, self.flag_dock)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.label_dock)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.shape_dock)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.file_dock)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.flag_dock)  # type: ignore[attr-defined]
+        self.addDockWidget(Qt.RightDockWidgetArea, self.label_dock)  # type: ignore[attr-defined]
+        self.addDockWidget(Qt.RightDockWidgetArea, self.shape_dock)  # type: ignore[attr-defined]
+        self.addDockWidget(Qt.RightDockWidgetArea, self.file_dock)  # type: ignore[attr-defined]
 
         # Actions
         action = functools.partial(utils.newAction, self)
@@ -271,7 +283,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         saveAuto = action(
             text=self.tr("Save &Automatically"),
-            slot=lambda x: self.actions.saveAuto.setChecked(x),
+            slot=lambda x: self.actions.saveAuto.setChecked(x),  # type: ignore[attr-defined]
             icon="save",
             tip=self.tr("Save automatically"),
             checkable=True,
@@ -280,19 +292,19 @@ class MainWindow(QtWidgets.QMainWindow):
         saveAuto.setChecked(self._config["auto_save"])
 
         saveWithImageData = action(
-            text="Save With Image Data",
+            text=self.tr("Save With Image Data"),
             slot=self.enableSaveImageWithData,
-            tip="Save image data in label file",
+            tip=self.tr("Save image data in label file"),
             checkable=True,
             checked=self._config["store_data"],
         )
 
         close = action(
-            "&Close",
+            self.tr("&Close"),
             self.closeFile,
             shortcuts["close"],
             "close",
-            "Close current file",
+            self.tr("Close current file"),
         )
 
         toggle_keep_prev_mode = action(
@@ -300,7 +312,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.toggleKeepPrevMode,
             shortcuts["toggle_keep_prev_mode"],
             None,
-            self.tr('Toggle "keep pevious annotation" mode'),
+            self.tr('Toggle "keep previous annotation" mode'),
             checkable=True,
         )
         toggle_keep_prev_mode.setChecked(self._config["keep_prev"])
@@ -361,13 +373,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr("Start drawing ai_polygon. Ctrl+LeftClick ends creation."),
             enabled=False,
         )
-        createAiPolygonMode.changed.connect(
-            lambda: self.canvas.initializeAiModel(
-                name=self._selectAiModelComboBox.currentText()
-            )
-            if self.canvas.createMode == "ai_polygon"
-            else None
-        )
         createAiMaskMode = action(
             self.tr("Create AI-Mask"),
             lambda: self.toggleDrawMode(False, createMode="ai_mask"),
@@ -375,13 +380,6 @@ class MainWindow(QtWidgets.QMainWindow):
             "objects",
             self.tr("Start drawing ai_mask. Ctrl+LeftClick ends creation."),
             enabled=False,
-        )
-        createAiMaskMode.changed.connect(
-            lambda: self.canvas.initializeAiModel(
-                name=self._selectAiModelComboBox.currentText()
-            )
-            if self.canvas.createMode == "ai_mask"
-            else None
         )
         editMode = action(
             self.tr("Edit Polygons"),
@@ -433,11 +431,11 @@ class MainWindow(QtWidgets.QMainWindow):
             enabled=False,
         )
         removePoint = action(
-            text="Remove Selected Point",
+            text=self.tr("Remove Selected Point"),
             slot=self.removeSelectedPoint,
             shortcut=shortcuts["remove_selected_point"],
             icon="edit",
-            tip="Remove selected point from polygon",
+            tip=self.tr("Remove selected point from polygon"),
             enabled=False,
         )
 
@@ -453,6 +451,7 @@ class MainWindow(QtWidgets.QMainWindow):
         hideAll = action(
             self.tr("&Hide\nPolygons"),
             functools.partial(self.togglePolygons, False),
+            shortcuts["hide_all_polygons"],
             icon="eye",
             tip=self.tr("Hide all polygons"),
             enabled=False,
@@ -460,8 +459,17 @@ class MainWindow(QtWidgets.QMainWindow):
         showAll = action(
             self.tr("&Show\nPolygons"),
             functools.partial(self.togglePolygons, True),
+            shortcuts["show_all_polygons"],
             icon="eye",
             tip=self.tr("Show all polygons"),
+            enabled=False,
+        )
+        toggleAll = action(
+            self.tr("&Toggle\nPolygons"),
+            functools.partial(self.togglePolygons, None),
+            shortcuts["toggle_all_polygons"],
+            icon="eye",
+            tip=self.tr("Toggle all polygons"),
             enabled=False,
         )
 
@@ -474,12 +482,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         zoom = QtWidgets.QWidgetAction(self)
         zoomBoxLayout = QtWidgets.QVBoxLayout()
-        zoomLabel = QtWidgets.QLabel("Zoom")
-        zoomLabel.setAlignment(Qt.AlignCenter)
+        zoomLabel = QtWidgets.QLabel(self.tr("Zoom"))
+        zoomLabel.setAlignment(Qt.AlignCenter)  # type: ignore[attr-defined]
         zoomBoxLayout.addWidget(zoomLabel)
         zoomBoxLayout.addWidget(self.zoomWidget)
         zoom.setDefaultWidget(QtWidgets.QWidget())
-        zoom.defaultWidget().setLayout(zoomBoxLayout)
+        zoom.defaultWidget().setLayout(zoomBoxLayout)  # type: ignore[union-attr]
         self.zoomWidget.setWhatsThis(
             str(
                 self.tr(
@@ -546,11 +554,11 @@ class MainWindow(QtWidgets.QMainWindow):
             enabled=False,
         )
         brightnessContrast = action(
-            "&Brightness Contrast",
+            self.tr("&Brightness Contrast"),
             self.brightnessContrast,
             None,
             "color",
-            "Adjust brightness and contrast",
+            self.tr("Adjust brightness and contrast"),
             enabled=False,
         )
         # Group zoom controls into a list for easier toggling.
@@ -563,7 +571,7 @@ class MainWindow(QtWidgets.QMainWindow):
             fitWidth,
         )
         self.zoomMode = self.FIT_WINDOW
-        fitWindow.setChecked(Qt.Checked)
+        fitWindow.setChecked(Qt.Checked)  # type: ignore[attr-defined]
         self.scalers = {
             self.FIT_WINDOW: self.scaleFitWindow,
             self.FIT_WIDTH: self.scaleFitWidth,
@@ -573,7 +581,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         edit = action(
             self.tr("&Edit Label"),
-            self.editLabel,
+            self._edit_label,
             shortcuts["edit_label"],
             "edit",
             self.tr("Modify the label of the selected polygon"),
@@ -592,14 +600,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._config["canvas"]["fill_drawing"]:
             fill_drawing.trigger()
 
-        # Lavel list context menu.
+        # Label list context menu.
         labelMenu = QtWidgets.QMenu()
         utils.addActions(labelMenu, (edit, delete))
-        self.labelList.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.labelList.setContextMenuPolicy(Qt.CustomContextMenu)  # type: ignore[attr-defined]
         self.labelList.customContextMenuRequested.connect(self.popLabelListMenu)
 
         # Store actions for further handling.
-        self.actions = utils.struct(
+        self.actions = utils.struct(  # type: ignore[assignment,method-assign]
             saveAuto=saveAuto,
             saveWithImageData=saveWithImageData,
             changeOutputDir=changeOutputDir,
@@ -643,6 +651,8 @@ class MainWindow(QtWidgets.QMainWindow):
             editMenu=(
                 edit,
                 duplicate,
+                copy,
+                paste,
                 delete,
                 None,
                 undo,
@@ -685,10 +695,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 editMode,
                 brightnessContrast,
             ),
-            onShapesPresent=(saveAs, hideAll, showAll),
+            onShapesPresent=(saveAs, hideAll, showAll, toggleAll),
         )
 
-        self.canvas.vertexSelected.connect(self.actions.removePoint.setEnabled)
+        self.canvas.vertexSelected.connect(self.actions.removePoint.setEnabled)  # type: ignore[attr-defined]
 
         self.menus = utils.struct(
             file=self.menu(self.tr("&File")),
@@ -700,13 +710,13 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
         utils.addActions(
-            self.menus.file,
+            self.menus.file,  # type: ignore[attr-defined]
             (
                 open_,
                 openNextImg,
                 openPrevImg,
                 opendir,
-                self.menus.recentFiles,
+                self.menus.recentFiles,  # type: ignore[attr-defined]
                 save,
                 saveAs,
                 saveAuto,
@@ -718,9 +728,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 quit,
             ),
         )
-        utils.addActions(self.menus.help, (help,))
+        utils.addActions(self.menus.help, (help,))  # type: ignore[attr-defined]
         utils.addActions(
-            self.menus.view,
+            self.menus.view,  # type: ignore[attr-defined]
             (
                 self.flag_dock.toggleViewAction(),
                 self.label_dock.toggleViewAction(),
@@ -731,6 +741,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 None,
                 hideAll,
                 showAll,
+                toggleAll,
                 None,
                 zoomIn,
                 zoomOut,
@@ -744,10 +755,10 @@ class MainWindow(QtWidgets.QMainWindow):
             ),
         )
 
-        self.menus.file.aboutToShow.connect(self.updateFileMenu)
+        self.menus.file.aboutToShow.connect(self.updateFileMenu)  # type: ignore[attr-defined]
 
         # Custom context menu for the canvas widget:
-        utils.addActions(self.canvas.menus[0], self.actions.menu)
+        utils.addActions(self.canvas.menus[0], self.actions.menu)  # type: ignore[attr-defined]
         utils.addActions(
             self.canvas.menus[1],
             (
@@ -758,26 +769,50 @@ class MainWindow(QtWidgets.QMainWindow):
 
         selectAiModel = QtWidgets.QWidgetAction(self)
         selectAiModel.setDefaultWidget(QtWidgets.QWidget())
-        selectAiModel.defaultWidget().setLayout(QtWidgets.QVBoxLayout())
+        selectAiModel.defaultWidget().setLayout(QtWidgets.QVBoxLayout())  # type: ignore[union-attr]
         #
-        selectAiModelLabel = QtWidgets.QLabel(self.tr("AI Model"))
-        selectAiModelLabel.setAlignment(QtCore.Qt.AlignCenter)
-        selectAiModel.defaultWidget().layout().addWidget(selectAiModelLabel)
+        selectAiModelLabel = QtWidgets.QLabel(self.tr("AI Mask Model"))
+        selectAiModelLabel.setAlignment(QtCore.Qt.AlignCenter)  # type: ignore[attr-defined]
+        selectAiModel.defaultWidget().layout().addWidget(selectAiModelLabel)  # type: ignore[union-attr]
         #
         self._selectAiModelComboBox = QtWidgets.QComboBox()
-        selectAiModel.defaultWidget().layout().addWidget(self._selectAiModelComboBox)
-        self._selectAiModelComboBox.addItems([model.name for model in MODELS])
-        self._selectAiModelComboBox.setCurrentIndex(1)
-        self._selectAiModelComboBox.currentIndexChanged.connect(
-            lambda: self.canvas.initializeAiModel(
-                name=self._selectAiModelComboBox.currentText()
+        selectAiModel.defaultWidget().layout().addWidget(self._selectAiModelComboBox)  # type: ignore[union-attr]
+        MODEL_NAMES: list[tuple[str, str]] = [
+            ("efficientsam:10m", "EfficientSam (speed)"),
+            ("efficientsam:latest", "EfficientSam (accuracy)"),
+            ("sam:100m", "SegmentAnything (speed)"),
+            ("sam:300m", "SegmentAnything (balanced)"),
+            ("sam:latest", "SegmentAnything (accuracy)"),
+            ("sam2:small", "Sam2 (speed)"),
+            ("sam2:latest", "Sam2 (balanced)"),
+            ("sam2:large", "Sam2 (accuracy)"),
+        ]
+        for model_name, model_ui_name in MODEL_NAMES:
+            self._selectAiModelComboBox.addItem(model_ui_name, userData=model_name)
+        model_ui_names: list[str] = [model_ui_name for _, model_ui_name in MODEL_NAMES]
+        if self._config["ai"]["default"] in model_ui_names:
+            model_index = model_ui_names.index(self._config["ai"]["default"])
+        else:
+            logger.warning(
+                "Default AI model is not found: %r",
+                self._config["ai"]["default"],
             )
-            if self.canvas.createMode in ["ai_polygon", "ai_mask"]
-            else None
+            model_index = 0
+        self._selectAiModelComboBox.currentIndexChanged.connect(
+            lambda index: self.canvas.set_ai_model_name(
+                model_name=self._selectAiModelComboBox.itemData(index)
+            )
         )
+        self._selectAiModelComboBox.setCurrentIndex(model_index)
+
+        self._ai_prompt_widget: AiPromptWidget = AiPromptWidget(
+            on_submit=self._submit_ai_prompt, parent=self
+        )
+        ai_prompt_action = QtWidgets.QWidgetAction(self)
+        ai_prompt_action.setDefaultWidget(self._ai_prompt_widget)
 
         self.tools = self.toolbar("Tools")
-        self.actions.tool = (
+        self.actions.tool = (  # type: ignore[attr-defined]
             open_,
             opendir,
             openPrevImg,
@@ -796,13 +831,15 @@ class MainWindow(QtWidgets.QMainWindow):
             zoom,
             None,
             selectAiModel,
+            None,
+            ai_prompt_action,
         )
 
-        self.statusBar().showMessage(str(self.tr("%s started.")) % __appname__)
-        self.statusBar().show()
+        self.statusBar().showMessage(str(self.tr("%s started.")) % __appname__)  # type: ignore[union-attr]
+        self.statusBar().show()  # type: ignore[union-attr]
 
         if output_file is not None and self._config["auto_save"]:
-            logger.warn(
+            logger.warning(
                 "If `auto_save` argument is True, `output_file` argument "
                 "is ignored and output filename is automatically "
                 "set as IMAGE_BASENAME.json."
@@ -813,16 +850,16 @@ class MainWindow(QtWidgets.QMainWindow):
         # Application state.
         self.image = QtGui.QImage()
         self.imagePath = None
-        self.recentFiles = []
+        self.recentFiles = []  # type: ignore[var-annotated]
         self.maxRecent = 7
         self.otherData = None
         self.zoom_level = 100
         self.fit_window = False
         self.zoom_values = {}  # key=filename, value=(zoom_mode, zoom_value)
         self.brightnessContrast_values = {}
-        self.scroll_values = {
-            Qt.Horizontal: {},
-            Qt.Vertical: {},
+        self.scroll_values = {  # type: ignore[var-annotated]
+            Qt.Horizontal: {},  # type: ignore[attr-defined]
+            Qt.Vertical: {},  # type: ignore[attr-defined]
         }  # key=filename, value=scroll_value
 
         if filename is not None and osp.isdir(filename):
@@ -864,7 +901,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #    QWhatsThis.enterWhatsThisMode()
 
     def menu(self, title, actions=None):
-        menu = self.menuBar().addMenu(title)
+        menu = self.menuBar().addMenu(title)  # type: ignore[union-attr]
         if actions:
             utils.addActions(menu, actions)
         return menu
@@ -873,10 +910,10 @@ class MainWindow(QtWidgets.QMainWindow):
         toolbar = ToolBar(title)
         toolbar.setObjectName("%sToolBar" % title)
         # toolbar.setOrientation(Qt.Vertical)
-        toolbar.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        toolbar.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)  # type: ignore[attr-defined]
         if actions:
             utils.addActions(toolbar, actions)
-        self.addToolBar(Qt.TopToolBarArea, toolbar)
+        self.addToolBar(Qt.TopToolBarArea, toolbar)  # type: ignore[attr-defined]
         return toolbar
 
     # Support Functions
@@ -885,38 +922,38 @@ class MainWindow(QtWidgets.QMainWindow):
         return not len(self.labelList)
 
     def populateModeActions(self):
-        tool, menu = self.actions.tool, self.actions.menu
+        tool, menu = self.actions.tool, self.actions.menu  # type: ignore[attr-defined]
         self.tools.clear()
         utils.addActions(self.tools, tool)
         self.canvas.menus[0].clear()
         utils.addActions(self.canvas.menus[0], menu)
-        self.menus.edit.clear()
+        self.menus.edit.clear()  # type: ignore[attr-defined]
         actions = (
-            self.actions.createMode,
-            self.actions.createRectangleMode,
-            self.actions.createCircleMode,
-            self.actions.createLineMode,
-            self.actions.createPointMode,
-            self.actions.createLineStripMode,
-            self.actions.createAiPolygonMode,
-            self.actions.createAiMaskMode,
-            self.actions.editMode,
+            self.actions.createMode,  # type: ignore[attr-defined]
+            self.actions.createRectangleMode,  # type: ignore[attr-defined]
+            self.actions.createCircleMode,  # type: ignore[attr-defined]
+            self.actions.createLineMode,  # type: ignore[attr-defined]
+            self.actions.createPointMode,  # type: ignore[attr-defined]
+            self.actions.createLineStripMode,  # type: ignore[attr-defined]
+            self.actions.createAiPolygonMode,  # type: ignore[attr-defined]
+            self.actions.createAiMaskMode,  # type: ignore[attr-defined]
+            self.actions.editMode,  # type: ignore[attr-defined]
         )
-        utils.addActions(self.menus.edit, actions + self.actions.editMenu)
+        utils.addActions(self.menus.edit, actions + self.actions.editMenu)  # type: ignore[attr-defined]
 
     def setDirty(self):
         # Even if we autosave the file, we keep the ability to undo
-        self.actions.undo.setEnabled(self.canvas.isShapeRestorable)
+        self.actions.undo.setEnabled(self.canvas.isShapeRestorable)  # type: ignore[attr-defined]
 
-        if self._config["auto_save"] or self.actions.saveAuto.isChecked():
-            label_file = osp.splitext(self.imagePath)[0] + ".json"
+        if self._config["auto_save"] or self.actions.saveAuto.isChecked():  # type: ignore[attr-defined]
+            label_file = osp.splitext(self.imagePath)[0] + ".json"  # type: ignore[arg-type]
             if self.output_dir:
                 label_file_without_path = osp.basename(label_file)
                 label_file = osp.join(self.output_dir, label_file_without_path)
             self.saveLabels(label_file)
             return
         self.dirty = True
-        self.actions.save.setEnabled(True)
+        self.actions.save.setEnabled(True)  # type: ignore[attr-defined]
         title = __appname__
         if self.filename is not None:
             title = "{} - {}*".format(title, self.filename)
@@ -924,37 +961,97 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def setClean(self):
         self.dirty = False
-        self.actions.save.setEnabled(False)
-        self.actions.createMode.setEnabled(True)
-        self.actions.createRectangleMode.setEnabled(True)
-        self.actions.createCircleMode.setEnabled(True)
-        self.actions.createLineMode.setEnabled(True)
-        self.actions.createPointMode.setEnabled(True)
-        self.actions.createLineStripMode.setEnabled(True)
-        self.actions.createAiPolygonMode.setEnabled(True)
-        self.actions.createAiMaskMode.setEnabled(True)
+        self.actions.save.setEnabled(False)  # type: ignore[attr-defined]
+        self.actions.createMode.setEnabled(True)  # type: ignore[attr-defined]
+        self.actions.createRectangleMode.setEnabled(True)  # type: ignore[attr-defined]
+        self.actions.createCircleMode.setEnabled(True)  # type: ignore[attr-defined]
+        self.actions.createLineMode.setEnabled(True)  # type: ignore[attr-defined]
+        self.actions.createPointMode.setEnabled(True)  # type: ignore[attr-defined]
+        self.actions.createLineStripMode.setEnabled(True)  # type: ignore[attr-defined]
+        self.actions.createAiPolygonMode.setEnabled(True)  # type: ignore[attr-defined]
+        self.actions.createAiMaskMode.setEnabled(True)  # type: ignore[attr-defined]
         title = __appname__
         if self.filename is not None:
             title = "{} - {}".format(title, self.filename)
         self.setWindowTitle(title)
 
         if self.hasLabelFile():
-            self.actions.deleteFile.setEnabled(True)
+            self.actions.deleteFile.setEnabled(True)  # type: ignore[attr-defined]
         else:
-            self.actions.deleteFile.setEnabled(False)
+            self.actions.deleteFile.setEnabled(False)  # type: ignore[attr-defined]
 
     def toggleActions(self, value=True):
         """Enable/Disable widgets which depend on an opened image."""
-        for z in self.actions.zoomActions:
+        for z in self.actions.zoomActions:  # type: ignore[attr-defined]
             z.setEnabled(value)
-        for action in self.actions.onLoadActive:
+        for action in self.actions.onLoadActive:  # type: ignore[attr-defined]
             action.setEnabled(value)
 
     def queueEvent(self, function):
         QtCore.QTimer.singleShot(0, function)
 
     def status(self, message, delay=5000):
-        self.statusBar().showMessage(message, delay)
+        self.statusBar().showMessage(message, delay)  # type: ignore[union-attr]
+
+    def _submit_ai_prompt(self, _) -> None:
+        texts = self._ai_prompt_widget.get_text_prompt().split(",")
+        boxes, scores, labels = bbox_from_text.get_bboxes_from_texts(
+            model="yoloworld",
+            image=utils.img_qt_to_arr(self.image)[:, :, :3],
+            texts=texts,
+        )
+
+        for shape in self.canvas.shapes:
+            if shape.shape_type != "rectangle" or shape.label not in texts:
+                continue
+            box = np.array(
+                [
+                    shape.points[0].x(),
+                    shape.points[0].y(),
+                    shape.points[1].x(),
+                    shape.points[1].y(),
+                ],
+                dtype=np.float32,
+            )
+            boxes = np.r_[boxes, [box]]
+            scores = np.r_[scores, [1.01]]
+            labels = np.r_[labels, [texts.index(shape.label)]]
+
+        boxes, scores, labels = bbox_from_text.nms_bboxes(
+            boxes=boxes,
+            scores=scores,
+            labels=labels,
+            iou_threshold=self._ai_prompt_widget.get_iou_threshold(),
+            score_threshold=self._ai_prompt_widget.get_score_threshold(),
+            max_num_detections=100,
+        )
+
+        keep = scores != 1.01
+        boxes = boxes[keep]
+        scores = scores[keep]
+        labels = labels[keep]
+
+        shape_dicts: list[dict] = bbox_from_text.get_shapes_from_bboxes(
+            boxes=boxes,
+            scores=scores,
+            labels=labels,
+            texts=texts,
+        )
+
+        shapes: list[Shape] = []
+        for shape_dict in shape_dicts:
+            shape = Shape(
+                label=shape_dict["label"],
+                shape_type=shape_dict["shape_type"],
+                description=shape_dict["description"],
+            )
+            for point in shape_dict["points"]:
+                shape.addPoint(QtCore.QPointF(*point))
+            shapes.append(shape)
+
+        self.canvas.storeShapes()
+        self.loadShapes(shapes, replace=False)
+        self.setDirty()
 
     def resetState(self):
         self.labelList.clear()
@@ -984,10 +1081,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.canvas.restoreShape()
         self.labelList.clear()
         self.loadShapes(self.canvas.shapes)
-        self.actions.undo.setEnabled(self.canvas.isShapeRestorable)
+        self.actions.undo.setEnabled(self.canvas.isShapeRestorable)  # type: ignore[attr-defined]
 
     def tutorial(self):
-        url = "https://github.com/wkentaro/labelme/tree/main/examples/tutorial"  # NOQA
+        url = "https://github.com/labelmeai/labelme/tree/main/examples/tutorial"  # NOQA
         webbrowser.open(url)
 
     def toggleDrawingSensitive(self, drawing=True):
@@ -995,21 +1092,21 @@ class MainWindow(QtWidgets.QMainWindow):
 
         In the middle of drawing, toggling between modes should be disabled.
         """
-        self.actions.editMode.setEnabled(not drawing)
-        self.actions.undoLastPoint.setEnabled(drawing)
-        self.actions.undo.setEnabled(not drawing)
-        self.actions.delete.setEnabled(not drawing)
+        self.actions.editMode.setEnabled(not drawing)  # type: ignore[attr-defined]
+        self.actions.undoLastPoint.setEnabled(drawing)  # type: ignore[attr-defined]
+        self.actions.undo.setEnabled(not drawing)  # type: ignore[attr-defined]
+        self.actions.delete.setEnabled(not drawing)  # type: ignore[attr-defined]
 
     def toggleDrawMode(self, edit=True, createMode="polygon"):
         draw_actions = {
-            "polygon": self.actions.createMode,
-            "rectangle": self.actions.createRectangleMode,
-            "circle": self.actions.createCircleMode,
-            "point": self.actions.createPointMode,
-            "line": self.actions.createLineMode,
-            "linestrip": self.actions.createLineStripMode,
-            "ai_polygon": self.actions.createAiPolygonMode,
-            "ai_mask": self.actions.createAiMaskMode,
+            "polygon": self.actions.createMode,  # type: ignore[attr-defined]
+            "rectangle": self.actions.createRectangleMode,  # type: ignore[attr-defined]
+            "circle": self.actions.createCircleMode,  # type: ignore[attr-defined]
+            "point": self.actions.createPointMode,  # type: ignore[attr-defined]
+            "line": self.actions.createLineMode,  # type: ignore[attr-defined]
+            "linestrip": self.actions.createLineStripMode,  # type: ignore[attr-defined]
+            "ai_polygon": self.actions.createAiPolygonMode,  # type: ignore[attr-defined]
+            "ai_mask": self.actions.createAiMaskMode,  # type: ignore[attr-defined]
         }
 
         self.canvas.setEditing(edit)
@@ -1020,7 +1117,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             for draw_mode, draw_action in draw_actions.items():
                 draw_action.setEnabled(createMode != draw_mode)
-        self.actions.editMode.setEnabled(not edit)
+        self.actions.editMode.setEnabled(not edit)  # type: ignore[attr-defined]
 
     def setEditMode(self):
         self.toggleDrawMode(True)
@@ -1031,7 +1128,7 @@ class MainWindow(QtWidgets.QMainWindow):
         def exists(filename):
             return osp.exists(str(filename))
 
-        menu = self.menus.recentFiles
+        menu = self.menus.recentFiles  # type: ignore[attr-defined]
         menu.clear()
         files = [f for f in self.recentFiles if f != current and exists(f)]
         for i, f in enumerate(files):
@@ -1043,7 +1140,7 @@ class MainWindow(QtWidgets.QMainWindow):
             menu.addAction(action)
 
     def popLabelListMenu(self, point):
-        self.menus.labelList.exec_(self.labelList.mapToGlobal(point))
+        self.menus.labelList.exec_(self.labelList.mapToGlobal(point))  # type: ignore[attr-defined]
 
     def validateLabel(self, label):
         # no validation
@@ -1051,33 +1148,68 @@ class MainWindow(QtWidgets.QMainWindow):
             return True
 
         for i in range(self.uniqLabelList.count()):
-            label_i = self.uniqLabelList.item(i).data(Qt.UserRole)
+            label_i = self.uniqLabelList.item(i).data(Qt.UserRole)  # type: ignore[attr-defined,union-attr]
             if self._config["validate_label"] in ["exact"]:
                 if label_i == label:
                     return True
         return False
 
-    def editLabel(self, item=None):
-        if item and not isinstance(item, LabelListWidgetItem):
-            raise TypeError("item must be LabelListWidgetItem type")
-
+    def _edit_label(self, value=None):
         if not self.canvas.editing():
             return
-        if not item:
-            item = self.currentItem()
-        if item is None:
+
+        items = self.labelList.selectedItems()
+        if not items:
+            logger.warning("No label is selected, so cannot edit label.")
             return
-        shape = item.shape()
-        if shape is None:
-            return
+
+        shape = items[0].shape()
+
+        if len(items) == 1:
+            edit_text = True
+            edit_flags = True
+            edit_group_id = True
+            edit_description = True
+        else:
+            edit_text = all(item.shape().label == shape.label for item in items[1:])
+            edit_flags = all(item.shape().flags == shape.flags for item in items[1:])
+            edit_group_id = all(
+                item.shape().group_id == shape.group_id for item in items[1:]
+            )
+            edit_description = all(
+                item.shape().description == shape.description for item in items[1:]
+            )
+
+        if not edit_text:
+            self.labelDialog.edit.setDisabled(True)
+            self.labelDialog.labelList.setDisabled(True)
+        if not edit_group_id:
+            self.labelDialog.edit_group_id.setDisabled(True)
+        if not edit_description:
+            self.labelDialog.editDescription.setDisabled(True)
+
         text, flags, group_id, description = self.labelDialog.popUp(
-            text=shape.label,
-            flags=shape.flags,
-            group_id=shape.group_id,
-            description=shape.description,
+            text=shape.label if edit_text else "",
+            flags=shape.flags if edit_flags else None,
+            group_id=shape.group_id if edit_group_id else None,
+            description=shape.description if edit_description else None,
+            flags_disabled=not edit_flags,
         )
+
+        if not edit_text:
+            self.labelDialog.edit.setDisabled(False)
+            self.labelDialog.labelList.setDisabled(False)
+        if not edit_group_id:
+            self.labelDialog.edit_group_id.setDisabled(False)
+        if not edit_description:
+            self.labelDialog.editDescription.setDisabled(False)
+
         if text is None:
+            assert flags is None
+            assert group_id is None
+            assert description is None
             return
+
         if not self.validateLabel(text):
             self.errorMessage(
                 self.tr("Invalid label"),
@@ -1086,26 +1218,35 @@ class MainWindow(QtWidgets.QMainWindow):
                 ),
             )
             return
-        shape.label = text
-        shape.flags = flags
-        shape.group_id = group_id
-        shape.description = description
 
-        self._update_shape_color(shape)
-        if shape.group_id is None:
-            item.setText(
-                '{} <font color="#{:02x}{:02x}{:02x}">●</font>'.format(
-                    html.escape(shape.label), *shape.fill_color.getRgb()[:3]
+        self.canvas.storeShapes()
+        for item in items:
+            shape: Shape = item.shape()  # type: ignore[no-redef]
+
+            if edit_text:
+                shape.label = text
+            if edit_flags:
+                shape.flags = flags
+            if edit_group_id:
+                shape.group_id = group_id
+            if edit_description:
+                shape.description = description
+
+            self._update_shape_color(shape)
+            if shape.group_id is None:
+                item.setText(
+                    '{} <font color="#{:02x}{:02x}{:02x}">●</font>'.format(
+                        html.escape(shape.label), *shape.fill_color.getRgb()[:3]
+                    )
                 )
-            )
-        else:
-            item.setText("{} ({})".format(shape.label, shape.group_id))
-        self.setDirty()
-        if self.uniqLabelList.findItemByLabel(shape.label) is None:
-            item = self.uniqLabelList.createItemFromLabel(shape.label)
-            self.uniqLabelList.addItem(item)
-            rgb = self._get_rgb_by_label(shape.label)
-            self.uniqLabelList.setItemLabel(item, shape.label, rgb)
+            else:
+                item.setText("{} ({})".format(shape.label, shape.group_id))
+            self.setDirty()
+            if self.uniqLabelList.findItemByLabel(shape.label) is None:
+                item = self.uniqLabelList.createItemFromLabel(shape.label)
+                self.uniqLabelList.addItem(item)
+                rgb = self._get_rgb_by_label(shape.label)
+                self.uniqLabelList.setItemLabel(item, shape.label, rgb)
 
     def fileSearchChanged(self):
         self.importDirImages(
@@ -1143,10 +1284,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.labelList.scrollToItem(item)
         self._noSelectionSlot = False
         n_selected = len(selected_shapes)
-        self.actions.delete.setEnabled(n_selected)
-        self.actions.duplicate.setEnabled(n_selected)
-        self.actions.copy.setEnabled(n_selected)
-        self.actions.edit.setEnabled(n_selected == 1)
+        self.actions.delete.setEnabled(n_selected)  # type: ignore[attr-defined]
+        self.actions.duplicate.setEnabled(n_selected)  # type: ignore[attr-defined]
+        self.actions.copy.setEnabled(n_selected)  # type: ignore[attr-defined]
+        self.actions.edit.setEnabled(n_selected)  # type: ignore[attr-defined]
 
     def addLabel(self, shape):
         if shape.group_id is None:
@@ -1161,7 +1302,7 @@ class MainWindow(QtWidgets.QMainWindow):
             rgb = self._get_rgb_by_label(shape.label)
             self.uniqLabelList.setItemLabel(item, shape.label, rgb)
         self.labelDialog.addLabelHistory(shape.label)
-        for action in self.actions.onShapesPresent:
+        for action in self.actions.onShapesPresent:  # type: ignore[attr-defined]
             action.setEnabled(True)
 
         self._update_shape_color(shape)
@@ -1220,7 +1361,7 @@ class MainWindow(QtWidgets.QMainWindow):
             label = shape["label"]
             points = shape["points"]
             shape_type = shape["shape_type"]
-            flags = shape["flags"]
+            flags: dict = shape["flags"] or {}
             description = shape.get("description", "")
             group_id = shape["group_id"]
             other_data = shape["other_data"]
@@ -1254,12 +1395,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.loadShapes(s)
 
     def loadFlags(self, flags):
-        self.flag_widget.clear()
+        self.flag_widget.clear()  # type: ignore[union-attr]
         for key, flag in flags.items():
             item = QtWidgets.QListWidgetItem(key)
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked if flag else Qt.Unchecked)
-            self.flag_widget.addItem(item)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)  # type: ignore[attr-defined]
+            item.setCheckState(Qt.Checked if flag else Qt.Unchecked)  # type: ignore[attr-defined]
+            self.flag_widget.addItem(item)  # type: ignore[union-attr]
 
     def saveLabels(self, filename):
         lf = LabelFile()
@@ -1268,26 +1409,30 @@ class MainWindow(QtWidgets.QMainWindow):
             data = s.other_data.copy()
             data.update(
                 dict(
-                    label=s.label.encode("utf-8") if PY2 else s.label,
+                    label=s.label,
                     points=[(p.x(), p.y()) for p in s.points],
                     group_id=s.group_id,
                     description=s.description,
                     shape_type=s.shape_type,
                     flags=s.flags,
-                    mask=None if s.mask is None else utils.img_arr_to_b64(s.mask),
+                    mask=(
+                        None
+                        if s.mask is None
+                        else utils.img_arr_to_b64(s.mask.astype(np.uint8))
+                    ),
                 )
             )
             return data
 
         shapes = [format_shape(item.shape()) for item in self.labelList]
         flags = {}
-        for i in range(self.flag_widget.count()):
-            item = self.flag_widget.item(i)
-            key = item.text()
-            flag = item.checkState() == Qt.Checked
+        for i in range(self.flag_widget.count()):  # type: ignore[union-attr]
+            item = self.flag_widget.item(i)  # type: ignore[union-attr]
+            key = item.text()  # type: ignore[union-attr]
+            flag = item.checkState() == Qt.Checked  # type: ignore[attr-defined,union-attr]
             flags[key] = flag
         try:
-            imagePath = osp.relpath(self.imagePath, osp.dirname(filename))
+            imagePath = osp.relpath(self.imagePath, osp.dirname(filename))  # type: ignore[arg-type]
             imageData = self.imageData if self._config["store_data"] else None
             if osp.dirname(filename) and not osp.exists(osp.dirname(filename)):
                 os.makedirs(osp.dirname(filename))
@@ -1302,11 +1447,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 flags=flags,
             )
             self.labelFile = lf
-            items = self.fileListWidget.findItems(self.imagePath, Qt.MatchExactly)
+            items = self.fileListWidget.findItems(self.imagePath, Qt.MatchExactly)  # type: ignore[arg-type,attr-defined]
             if len(items) > 0:
                 if len(items) != 1:
                     raise RuntimeError("There are duplicate files.")
-                items[0].setCheckState(Qt.Checked)
+                items[0].setCheckState(Qt.Checked)  # type: ignore[attr-defined]
             # disable allows next and previous image to proceed
             # self.filename = filename
             return True
@@ -1317,11 +1462,8 @@ class MainWindow(QtWidgets.QMainWindow):
             return False
 
     def duplicateSelectedShape(self):
-        added_shapes = self.canvas.duplicateSelectedShapes()
-        self.labelList.clearSelection()
-        for shape in added_shapes:
-            self.addLabel(shape)
-        self.setDirty()
+        self.copySelectedShape()
+        self.pasteSelectedShape()
 
     def pasteSelectedShape(self):
         self.loadShapes(self._copied_shapes, replace=False)
@@ -1329,7 +1471,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def copySelectedShape(self):
         self._copied_shapes = [s.copy() for s in self.canvas.selectedShapes]
-        self.actions.paste.setEnabled(len(self._copied_shapes) > 0)
+        self.actions.paste.setEnabled(len(self._copied_shapes) > 0)  # type: ignore[attr-defined]
 
     def labelSelectionChanged(self):
         if self._noSelectionSlot:
@@ -1354,7 +1496,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def labelItemChanged(self, item):
         shape = item.shape()
-        self.canvas.setShapeVisible(shape, item.checkState() == Qt.Checked)
+        self.canvas.setShapeVisible(shape, item.checkState() == Qt.Checked)  # type: ignore[attr-defined]
 
     def labelOrderChanged(self):
         self.setDirty()
@@ -1370,7 +1512,7 @@ class MainWindow(QtWidgets.QMainWindow):
         items = self.uniqLabelList.selectedItems()
         text = None
         if items:
-            text = items[0].data(Qt.UserRole)
+            text = items[0].data(Qt.UserRole)  # type: ignore[attr-defined]
         flags = {}
         group_id = None
         description = ""
@@ -1394,9 +1536,9 @@ class MainWindow(QtWidgets.QMainWindow):
             shape.group_id = group_id
             shape.description = description
             self.addLabel(shape)
-            self.actions.editMode.setEnabled(True)
-            self.actions.undoLastPoint.setEnabled(False)
-            self.actions.undo.setEnabled(True)
+            self.actions.editMode.setEnabled(True)  # type: ignore[attr-defined]
+            self.actions.undoLastPoint.setEnabled(False)  # type: ignore[attr-defined]
+            self.actions.undo.setEnabled(True)  # type: ignore[attr-defined]
             self.setDirty()
         else:
             self.canvas.undoLastLine()
@@ -1405,16 +1547,16 @@ class MainWindow(QtWidgets.QMainWindow):
     def scrollRequest(self, delta, orientation):
         units = -delta * 0.1  # natural scroll
         bar = self.scrollBars[orientation]
-        value = bar.value() + bar.singleStep() * units
+        value = bar.value() + bar.singleStep() * units  # type: ignore[union-attr]
         self.setScroll(orientation, value)
 
     def setScroll(self, orientation, value):
-        self.scrollBars[orientation].setValue(int(value))
+        self.scrollBars[orientation].setValue(int(value))  # type: ignore[union-attr]
         self.scroll_values[orientation][self.filename] = value
 
     def setZoom(self, value):
-        self.actions.fitWidth.setChecked(False)
-        self.actions.fitWindow.setChecked(False)
+        self.actions.fitWidth.setChecked(False)  # type: ignore[attr-defined]
+        self.actions.fitWindow.setChecked(False)  # type: ignore[attr-defined]
         self.zoomMode = self.MANUAL_ZOOM
         self.zoomWidget.setValue(value)
         self.zoom_values[self.filename] = (self.zoomMode, value)
@@ -1442,29 +1584,29 @@ class MainWindow(QtWidgets.QMainWindow):
             y_shift = round(pos.y() * canvas_scale_factor) - pos.y()
 
             self.setScroll(
-                Qt.Horizontal,
-                self.scrollBars[Qt.Horizontal].value() + x_shift,
+                Qt.Horizontal,  # type: ignore[attr-defined]
+                self.scrollBars[Qt.Horizontal].value() + x_shift,  # type: ignore[attr-defined,union-attr]
             )
             self.setScroll(
-                Qt.Vertical,
-                self.scrollBars[Qt.Vertical].value() + y_shift,
+                Qt.Vertical,  # type: ignore[attr-defined]
+                self.scrollBars[Qt.Vertical].value() + y_shift,  # type: ignore[attr-defined,union-attr]
             )
 
     def setFitWindow(self, value=True):
         if value:
-            self.actions.fitWidth.setChecked(False)
+            self.actions.fitWidth.setChecked(False)  # type: ignore[attr-defined]
         self.zoomMode = self.FIT_WINDOW if value else self.MANUAL_ZOOM
         self.adjustScale()
 
     def setFitWidth(self, value=True):
         if value:
-            self.actions.fitWindow.setChecked(False)
+            self.actions.fitWindow.setChecked(False)  # type: ignore[attr-defined]
         self.zoomMode = self.FIT_WIDTH if value else self.MANUAL_ZOOM
         self.adjustScale()
 
     def enableKeepPrevScale(self, enabled):
         self._config["keep_prev_scale"] = enabled
-        self.actions.keepPrevScale.setChecked(enabled)
+        self.actions.keepPrevScale.setChecked(enabled)  # type: ignore[attr-defined]
 
     def onNewBrightnessContrast(self, qimage):
         self.canvas.loadPixmap(QtGui.QPixmap.fromImage(qimage), clear_shapes=False)
@@ -1489,8 +1631,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.brightnessContrast_values[self.filename] = (brightness, contrast)
 
     def togglePolygons(self, value):
+        flag = value
         for item in self.labelList:
-            item.setCheckState(Qt.Checked if value else Qt.Unchecked)
+            if value is None:
+                flag = item.checkState() == Qt.Unchecked  # type: ignore[attr-defined]
+            item.setCheckState(Qt.Checked if flag else Qt.Unchecked)  # type: ignore[attr-defined]
 
     def loadFile(self, filename=None):
         """Load the specified file, or the last opened file if None."""
@@ -1536,7 +1681,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.imageData = self.labelFile.imageData
             self.imagePath = osp.join(
                 osp.dirname(label_file),
-                self.labelFile.imagePath,
+                self.labelFile.imagePath,  # type: ignore[arg-type]
             )
             self.otherData = self.labelFile.otherData
         else:
@@ -1544,7 +1689,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if self.imageData:
                 self.imagePath = filename
             self.labelFile = None
-        image = QtGui.QImage.fromData(self.imageData)
+        image = QtGui.QImage.fromData(self.imageData)  # type: ignore[arg-type]
 
         if image.isNull():
             formats = [
@@ -1645,8 +1790,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def scaleFitWindow(self):
         """Figure out the size of the pixmap to fit the main widget."""
         e = 2.0  # So that no scrollbars are generated.
-        w1 = self.centralWidget().width() - e
-        h1 = self.centralWidget().height() - e
+        w1 = self.centralWidget().width() - e  # type: ignore[union-attr]
+        h1 = self.centralWidget().height() - e  # type: ignore[union-attr]
         a1 = w1 / h1
         # Calculate a new scale value based on the pixmap's aspect ratio.
         w2 = self.canvas.pixmap.width() - 0.0
@@ -1656,12 +1801,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def scaleFitWidth(self):
         # The epsilon does not seem to work too well here.
-        w = self.centralWidget().width() - 2.0
+        w = self.centralWidget().width() - 2.0  # type: ignore[union-attr]
         return w / self.canvas.pixmap.width()
 
     def enableSaveImageWithData(self, enabled):
         self._config["store_data"] = enabled
-        self.actions.saveWithImageData.setChecked(enabled)
+        self.actions.saveWithImageData.setChecked(enabled)  # type: ignore[attr-defined]
 
     def closeEvent(self, event):
         if not self.mayContinue():
@@ -1702,7 +1847,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def openPrevImg(self, _value=False):
         keep_prev = self._config["keep_prev"]
         if QtWidgets.QApplication.keyboardModifiers() == (
-            Qt.ControlModifier | Qt.ShiftModifier
+            Qt.ControlModifier | Qt.ShiftModifier  # type: ignore[attr-defined]
         ):
             self._config["keep_prev"] = True
 
@@ -1726,7 +1871,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def openNextImg(self, _value=False, load=True):
         keep_prev = self._config["keep_prev"]
         if QtWidgets.QApplication.keyboardModifiers() == (
-            Qt.ControlModifier | Qt.ShiftModifier
+            Qt.ControlModifier | Qt.ShiftModifier  # type: ignore[attr-defined]
         ):
             self._config["keep_prev"] = True
 
@@ -1797,11 +1942,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.output_dir = output_dir
 
-        self.statusBar().showMessage(
+        self.statusBar().showMessage(  # type: ignore[union-attr]
             self.tr("%s . Annotations will be saved/loaded in %s")
             % ("Change Annotations Dir", self.output_dir)
         )
-        self.statusBar().show()
+        self.statusBar().show()  # type: ignore[union-attr]
 
         current_filename = self.filename
         self.importDirImages(self.lastOpenDir, load=False)
@@ -1853,7 +1998,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tr("Label files (*%s)") % LabelFile.suffix,
         )
         if isinstance(filename, tuple):
-            filename, _ = filename
+            filename, _ = filename  # type: ignore[assignment]
         return filename
 
     def _saveFile(self, filename):
@@ -1868,7 +2013,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setClean()
         self.toggleActions(False)
         self.canvas.setEnabled(False)
-        self.actions.saveAs.setEnabled(False)
+        self.actions.saveAs.setEnabled(False)  # type: ignore[attr-defined]
 
     def getLabelFile(self):
         if self.filename.lower().endswith(".json"):
@@ -1893,7 +2038,7 @@ class MainWindow(QtWidgets.QMainWindow):
             logger.info("Label file is removed: {}".format(label_file))
 
             item = self.fileListWidget.currentItem()
-            item.setCheckState(Qt.Unchecked)
+            item.setCheckState(Qt.Unchecked)  # type: ignore[attr-defined,union-attr]
 
             self.resetState()
 
@@ -1948,11 +2093,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def removeSelectedPoint(self):
         self.canvas.removeSelectedPoint()
         self.canvas.update()
-        if not self.canvas.hShape.points:
+        if not self.canvas.hShape.points:  # type: ignore[union-attr]
             self.canvas.deleteShape(self.canvas.hShape)
             self.remLabels([self.canvas.hShape])
             if self.noShapes():
-                for action in self.actions.onShapesPresent:
+                for action in self.actions.onShapesPresent:  # type: ignore[attr-defined]
                     action.setEnabled(False)
         self.setDirty()
 
@@ -1967,7 +2112,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.remLabels(self.canvas.deleteSelected())
             self.setDirty()
             if self.noShapes():
-                for action in self.actions.onShapesPresent:
+                for action in self.actions.onShapesPresent:  # type: ignore[attr-defined]
                     action.setEnabled(False)
 
     def copyShape(self):
@@ -2007,7 +2152,7 @@ class MainWindow(QtWidgets.QMainWindow):
         lst = []
         for i in range(self.fileListWidget.count()):
             item = self.fileListWidget.item(i)
-            lst.append(item.text())
+            lst.append(item.text())  # type: ignore[union-attr]
         return lst
 
     def importDroppedImageFiles(self, imageFiles):
@@ -2025,22 +2170,22 @@ class MainWindow(QtWidgets.QMainWindow):
                 label_file_without_path = osp.basename(label_file)
                 label_file = osp.join(self.output_dir, label_file_without_path)
             item = QtWidgets.QListWidgetItem(file)
-            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)  # type: ignore[attr-defined]
             if QtCore.QFile.exists(label_file) and LabelFile.is_label_file(label_file):
-                item.setCheckState(Qt.Checked)
+                item.setCheckState(Qt.Checked)  # type: ignore[attr-defined]
             else:
-                item.setCheckState(Qt.Unchecked)
+                item.setCheckState(Qt.Unchecked)  # type: ignore[attr-defined]
             self.fileListWidget.addItem(item)
 
         if len(self.imageList) > 1:
-            self.actions.openNextImg.setEnabled(True)
-            self.actions.openPrevImg.setEnabled(True)
+            self.actions.openNextImg.setEnabled(True)  # type: ignore[attr-defined]
+            self.actions.openPrevImg.setEnabled(True)  # type: ignore[attr-defined]
 
         self.openNextImg()
 
     def importDirImages(self, dirpath, pattern=None, load=True):
-        self.actions.openNextImg.setEnabled(True)
-        self.actions.openPrevImg.setEnabled(True)
+        self.actions.openNextImg.setEnabled(True)  # type: ignore[attr-defined]
+        self.actions.openPrevImg.setEnabled(True)  # type: ignore[attr-defined]
 
         if not self.mayContinue() or not dirpath:
             return
@@ -2048,19 +2193,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self.lastOpenDir = dirpath
         self.filename = None
         self.fileListWidget.clear()
-        for filename in self.scanAllImages(dirpath):
-            if pattern and pattern not in filename:
-                continue
+
+        filenames = self.scanAllImages(dirpath)
+        if pattern:
+            try:
+                filenames = [f for f in filenames if re.search(pattern, f)]
+            except re.error:
+                pass
+        for filename in filenames:
             label_file = osp.splitext(filename)[0] + ".json"
             if self.output_dir:
                 label_file_without_path = osp.basename(label_file)
                 label_file = osp.join(self.output_dir, label_file_without_path)
             item = QtWidgets.QListWidgetItem(filename)
-            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)  # type: ignore[attr-defined]
             if QtCore.QFile.exists(label_file) and LabelFile.is_label_file(label_file):
-                item.setCheckState(Qt.Checked)
+                item.setCheckState(Qt.Checked)  # type: ignore[attr-defined]
             else:
-                item.setCheckState(Qt.Unchecked)
+                item.setCheckState(Qt.Unchecked)  # type: ignore[attr-defined]
             self.fileListWidget.addItem(item)
         self.openNextImg(load=load)
 
@@ -2074,7 +2224,7 @@ class MainWindow(QtWidgets.QMainWindow):
         for root, dirs, files in os.walk(folderPath):
             for file in files:
                 if file.lower().endswith(tuple(extensions)):
-                    relativePath = osp.join(root, file)
+                    relativePath = os.path.normpath(osp.join(root, file))
                     images.append(relativePath)
         images = natsort.os_sorted(images)
         return images

@@ -1,6 +1,6 @@
 import pytest
-from qtpy import QtCore
-from qtpy import QtWidgets
+from PyQt5 import QtCore
+from PyQt5 import QtWidgets
 
 from labelme.widgets import LabelDialog
 from labelme.widgets import LabelQLineEdit
@@ -54,9 +54,7 @@ def test_LabelDialog_popUp(qtbot):
     # popUp(text='cat')
 
     def interact():
-        qtbot.keyClick(
-            widget.edit, QtCore.Qt.Key_P
-        )  # enter 'p' for 'person'  # NOQA
+        qtbot.keyClick(widget.edit, QtCore.Qt.Key_P)  # enter 'p' for 'person'  # NOQA
         qtbot.keyClick(widget.edit, QtCore.Qt.Key_Enter)  # NOQA
         qtbot.keyClick(widget.edit, QtCore.Qt.Key_Enter)  # NOQA
 
@@ -83,9 +81,7 @@ def test_LabelDialog_popUp(qtbot):
     # popUp() + key_Up
 
     def interact():
-        qtbot.keyClick(
-            widget.edit, QtCore.Qt.Key_Up
-        )  # 'person' -> 'dog'  # NOQA
+        qtbot.keyClick(widget.edit, QtCore.Qt.Key_Up)  # 'person' -> 'dog'  # NOQA
         qtbot.keyClick(widget.edit, QtCore.Qt.Key_Enter)  # NOQA
         qtbot.keyClick(widget.edit, QtCore.Qt.Key_Enter)  # NOQA
 
