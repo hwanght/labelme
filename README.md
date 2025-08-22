@@ -45,67 +45,31 @@ It is written in Python and uses Qt for its graphical interface.
 
 ## Installation
 
-There are options:
+There are 3 options to install labelme:
 
-- Platform agnostic installation: [Anaconda](#anaconda)
-- Platform specific installation: [Ubuntu](#ubuntu), [macOS](#macos), [Windows](#windows)
-- Pre-build binaries from [the release section](https://github.com/wkentaro/labelme/releases)
+### Option 1: Using pip
 
-### Anaconda
-
-You need install [Anaconda](https://www.continuum.io/downloads), then run below:
+For more detail, check ["Install Labelme using Pip"](https://www.labelme.io/docs/install-labelme-pip).
 
 ```bash
-# python3
-conda create --name=labelme python=3
-source activate labelme
-# conda install -c conda-forge pyside2
-# conda install pyqt
-# pip install pyqt5  # pyqt5 can be installed via pip on python3
-pip install labelme
-# or you can install everything by conda command
-# conda install labelme -c conda-forge
-```
-
-### Ubuntu
-
-```bash
-sudo apt-get install labelme
-
-# or
-sudo pip3 install labelme
-
-# or install standalone executable from:
-# https://github.com/wkentaro/labelme/releases
-```
-
-### macOS
-
-```bash
-brew install pyqt  # maybe pyqt5
 pip install labelme
 
-# or
-brew install wkentaro/labelme/labelme  # command line interface
-# brew install --cask wkentaro/labelme/labelme  # app
-
-# or install standalone executable/app from:
-# https://github.com/wkentaro/labelme/releases
+# To install the latest version from GitHub:
+# pip install git+https://github.com/wkentaro/labelme.git
 ```
 
-### Windows
+### Option 2: Using standalone executable (Easiest)
 
-Install [Anaconda](https://www.continuum.io/downloads), then in an Anaconda Prompt run:
+If you're willing to invest in the convenience of simple installation without any dependencies (Python, Qt),
+you can download the standalone executable from ["Install Labelme as App"](https://www.labelme.io/docs/install-labelme-app).
 
-```bash
-conda create --name=labelme python=3
-conda activate labelme
-pip install labelme
+It's a one-time payment for lifetime access, and it helps us to maintain this project.
 
-# or install standalone executable/app from:
-# https://github.com/wkentaro/labelme/releases
-```
+### Option 3: Using a package manager in each Linux distribution
 
+In some Linux distributions, you can install labelme via their package managers (e.g., apt, pacman). The following systems are currently available:
+
+[![Packaging status](https://repology.org/badge/vertical-allrepos/labelme.svg)](https://repology.org/project/labelme/versions)
 
 ## Usage
 
