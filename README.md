@@ -31,7 +31,46 @@
 Labelme is a graphical image annotation tool inspired by <http://labelme.csail.mit.edu>.  
 It is written in Python and uses Qt for its graphical interface.
 
+## Added features and contents in this fork
 
+- Filtering label by double clicking labels on the label list panel
+- Adding standalone app build scripts for Windows and Unix based systems
+- Modifying version dependency for buidling standalone app (`onnxruntime<=1.19.2, numpy<2.0`, build tested on `python==3.10`)
+
+## Build usage
+
+This section covers conda-based environment setup only.
+
+### Windows
+
+```bash
+# Clone git repo to local
+git clone https://github.com/hwanght/labelme.git
+cd labelme
+
+# Create conda virtual environment
+conda create -n labelme python=3.10
+conda activate labelme
+
+# Install labelme and dependency
+pip3 install .
+.\build_windws.bat
+```
+
+### Unix (Ubuntu/Mac)
+```bash
+# Clone git repo to local
+git clone https://github.com/hwanght/labelme.git
+cd labelme
+
+# Create conda virtual environment
+conda create -n labelme python=3.10
+conda activate labelme
+
+# Install labelme and dependency
+pip3 install .
+./build_unix.sh
+```
 
 ## Features
 
