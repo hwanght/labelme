@@ -55,7 +55,7 @@ pyinstaller "$ENTRY" \
     --add-data="$LABELME_PATH/icons:labelme/icons" \
     --add-data="$LABELME_PATH/translate:translate" \
     --icon="$LABELME_PATH/icons/icon.png" \
-    --onedir
+    --onefile
 
 echo
 echo "Build finished. Output: $DIST_DIR/Labelme"
