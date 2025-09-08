@@ -368,7 +368,7 @@ class MainWindow(QtWidgets.QMainWindow):
         createAiPolygonMode = action(
             self.tr("Create AI-Polygon"),
             lambda: self.toggleDrawMode(False, createMode="ai_polygon"),
-            None,
+            shortcuts["create_ai_polygon"],
             "objects",
             self.tr("Start drawing ai_polygon. Ctrl+LeftClick ends creation."),
             enabled=False,
@@ -376,7 +376,7 @@ class MainWindow(QtWidgets.QMainWindow):
         createAiMaskMode = action(
             self.tr("Create AI-Mask"),
             lambda: self.toggleDrawMode(False, createMode="ai_mask"),
-            None,
+            shortcuts["create_ai_mask"],
             "objects",
             self.tr("Start drawing ai_mask. Ctrl+LeftClick ends creation."),
             enabled=False,
