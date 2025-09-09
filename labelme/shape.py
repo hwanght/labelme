@@ -266,8 +266,17 @@ class Shape(object):
 
             painter.drawPath(line_path)
             if vrtx_path.length() > 0:
-                painter.drawPath(vrtx_path)
-                painter.fillPath(vrtx_path, self._vertex_fill_color)  # type: ignore[has-type]
+                if self.shape_type == "points":
+                    pen.setColor(QtGui.QColor(0, 127, 255, 255))
+                    painter.setPen(pen)
+                    painter.drawPath(vrtx_path)
+                    painter.fillPath(vrtx_path, QtGui.QColor(0, 127, 255, 255))  # type: ignore[has-type]
+                else:
+                    painter.drawPath(vrtx_path)
+                    painter.fillPath(vrtx_path, self._vertex_fill_color)  # type: ignore[has-type]
+
+                # painter.fillPath(vrtx_path, self._vertex_fill_color)  # type: ignore[has-type]
+                # painter.fillPath(vrtx_path, QtGui.QColor(0, 127, 255, 255))  # type: ignore[has-type]
             if self.fill and self.mask is None:
                 color = self.select_fill_color if self.selected else self.fill_color
                 painter.fillPath(line_path, color)

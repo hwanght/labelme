@@ -3,6 +3,8 @@
 
 /build/
 /dist/
+/dist_mac
+/dist_win
 /*.egg-info/
 
 *.py[cdo]
