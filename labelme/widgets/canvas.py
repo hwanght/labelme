@@ -760,6 +760,7 @@ class Canvas(QtWidgets.QWidget):
         return not (0 <= p.x() <= w - 1 and 0 <= p.y() <= h - 1)
 
     def finalise(self):
+
         assert self.current
         if self.createMode in ["ai_polygon", "ai_mask"]:
             _update_shape_with_sam(
@@ -869,6 +870,9 @@ class Canvas(QtWidgets.QWidget):
             self.movingShape = True
 
     def keyPressEvent(self, ev):
+        if ev.isAutoRepeat():
+            return
+
         modifiers = ev.modifiers()
         key = ev.key()
         if self.drawing():
